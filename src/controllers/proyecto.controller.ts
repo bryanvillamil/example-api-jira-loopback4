@@ -17,20 +17,24 @@ import {
   del,
   requestBody,
 } from '@loopback/rest';
-import {Proyecto} from '../models';
-import {ProyectoRepository} from '../repositories';
+import { Proyecto } from '../models';
+import { ProyectoRepository, IssueRepository, TiempoRepository } from '../repositories';
 
 export class ProyectoController {
   constructor(
     @repository(ProyectoRepository)
-    public proyectoRepository : ProyectoRepository,
-  ) {}
+    public proyectoRepository: ProyectoRepository,
+    @repository(IssueRepository)
+    public issueRepository: IssueRepository,
+    @repository(TiempoRepository)
+    public tiempoRepository: TiempoRepository,
+  ) { }
 
   @post('/proyectos', {
     responses: {
       '200': {
         description: 'Proyecto model instance',
-        content: {'application/json': {schema: getModelSchemaRef(Proyecto)}},
+        content: { 'application/json': { schema: getModelSchemaRef(Proyecto) } },
       },
     },
   })
@@ -54,7 +58,7 @@ export class ProyectoController {
     responses: {
       '200': {
         description: 'Proyecto model count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -72,7 +76,7 @@ export class ProyectoController {
           'application/json': {
             schema: {
               type: 'array',
-              items: getModelSchemaRef(Proyecto, {includeRelations: true}),
+              items: getModelSchemaRef(Proyecto, { includeRelations: true }),
             },
           },
         },
@@ -81,15 +85,19 @@ export class ProyectoController {
   })
   async find(
     @param.query.object('filter', getFilterSchemaFor(Proyecto)) filter?: Filter<Proyecto>,
-  ): Promise<Proyecto[]> {
-    return this.proyectoRepository.find(filter);
+  ): Promise<{}> {
+    const listaProyectos = await this.proyectoRepository.find(filter);
+    return {
+      statusCode: 200,
+      response: listaProyectos
+    }
   }
 
   @patch('/proyectos', {
     responses: {
       '200': {
         description: 'Proyecto PATCH success count',
-        content: {'application/json': {schema: CountSchema}},
+        content: { 'application/json': { schema: CountSchema } },
       },
     },
   })
@@ -97,14 +105,18 @@ export class ProyectoController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Proyecto, {partial: true}),
+          schema: getModelSchemaRef(Proyecto, { partial: true }),
         },
       },
     })
     proyecto: Proyecto,
     @param.query.object('where', getWhereSchemaFor(Proyecto)) where?: Where<Proyecto>,
-  ): Promise<Count> {
-    return this.proyectoRepository.updateAll(proyecto, where);
+  ): Promise<{}> {
+    await this.proyectoRepository.updateAll(proyecto, where);
+    return {
+      statusCode: 200,
+      response: 'El Proyecto fue Editado'
+    }
   }
 
   @get('/proyectos/{id}', {
@@ -113,7 +125,7 @@ export class ProyectoController {
         description: 'Proyecto model instance',
         content: {
           'application/json': {
-            schema: getModelSchemaRef(Proyecto, {includeRelations: true}),
+            schema: getModelSchemaRef(Proyecto, { includeRelations: true }),
           },
         },
       },
@@ -138,13 +150,17 @@ export class ProyectoController {
     @requestBody({
       content: {
         'application/json': {
-          schema: getModelSchemaRef(Proyecto, {partial: true}),
+          schema: getModelSchemaRef(Proyecto, { partial: true }),
         },
       },
     })
     proyecto: Proyecto,
-  ): Promise<void> {
+  ): Promise<{}> {
     await this.proyectoRepository.updateById(id, proyecto);
+    return {
+      statusCode: 200,
+      response: 'El Proyecto fue Editado'
+    }
   }
 
   @put('/proyectos/{id}', {
@@ -157,8 +173,12 @@ export class ProyectoController {
   async replaceById(
     @param.path.number('id') id: number,
     @requestBody() proyecto: Proyecto,
-  ): Promise<void> {
+  ): Promise<{}> {
     await this.proyectoRepository.replaceById(id, proyecto);
+    return {
+      statusCode: 200,
+      response: 'El Proyecto fue Editado'
+    }
   }
 
   @del('/proyectos/{id}', {
@@ -168,7 +188,37 @@ export class ProyectoController {
       },
     },
   })
-  async deleteById(@param.path.number('id') id: number): Promise<void> {
+  async deleteById(@param.path.number('id') id: number): Promise<{}> {
+
+    const issues = await this.issueRepository.find({
+      where: { proyecto_id: id },
+    });
+    const issuesIds = issues.map(item => item.id ? item.id : 0).filter(item => !!item);
+    const tiempos = await this.tiempoRepository.find({
+      where: {
+        issue_id: {
+          inq: issuesIds
+        },
+      },
+    });
+    const tiemposIds = tiempos.map(item => item.id);
+    // delete in tiempos
+    await this.tiempoRepository.deleteAll({
+      id: {
+        inq: tiemposIds,
+      },
+    });
+    // delete in issue
+    await this.issueRepository.deleteAll({
+      id: {
+        inq: issuesIds,
+      },
+    });
+    // delete in proyecto
     await this.proyectoRepository.deleteById(id);
+    return {
+      statusCode: 200,
+      response: 'Proyecto Eliminado'
+    }
   }
 }
