@@ -5,6 +5,7 @@ import { get, getModelSchemaRef, param, getFilterSchemaFor } from "@loopback/res
 import { Tiempo } from "../models/tiempo.model";
 import { Usuario } from '../models';
 import moment from 'moment-with-locales-es6';
+import { format } from "path";
 
 // Uncomment these imports to begin using these cool features!
 
@@ -71,8 +72,8 @@ export class TiempoController {
     // @param.query.object('filter', getFilterSchemaFor(Tiempo)) filter?: Filter<Tiempo>
   ): Promise<{}> {
 
-    const fechaInicio = moment(fecha_inicio).date();
-    const fechaFin = moment(fecha_fin);
+    const fechaInicio = moment.utc(fecha_inicio).format('YYYY-MM-DD');
+    const fechaFin = moment.utc(fecha_fin).format('YYYY-MM-DD');
 
     const usuarios = await this.tiempoRepository.find({
       where: { usuario_id: usuario_id },
@@ -92,9 +93,12 @@ export class TiempoController {
     });
 
 
-    const users = usuarios.filter(item =>
-      moment(item.fecha) >= fechaInicio && moment(item.fecha) <= fechaFin
-    );
+    const users = usuarios.filter(item => {
+      const itemFecha = moment.utc(item.fecha).format('YYYY-MM-DD');
+      return (
+        itemFecha >= fechaInicio && itemFecha <= fechaFin
+      )
+    });
 
     let tiempoTotal = moment('00:00:00', 'HH:mm:ss');
     const detalleLogs = users.map(item => {
@@ -104,7 +108,7 @@ export class TiempoController {
 
       tiempoTotal = tiempoTotal + diff;
       return {
-        horasTabajadas: moment.utc(diff).format("HH:mm"),
+        horasTrabajadas: moment.utc(diff).format("HH:mm"),
         issue_id: item.issue_id
       }
     });
@@ -125,13 +129,13 @@ export class TiempoController {
         detalleLogsSum.forEach((el, idx) => {
           if (el.issue_id === issue) {
             indexDetail = idx;
-            time = el.horasTabajadas
+            time = el.horasTrabajadas
           }
         })
-        time = moment(time, "HH:mm") + moment.utc(item.horasTabajadas, "HH:mm")
+        time = moment(time, "HH:mm") + moment.utc(item.horasTrabajadas, "HH:mm")
         time = moment(time).format("HH:mm");
         detalleLogsSum.splice(indexDetail, 1)
-        detalleLogsSum.push({ horasTabajadas: time, issue_id: issue })
+        detalleLogsSum.push({ horasTrabajadas: time, issue_id: issue })
       }
     })
 
@@ -199,8 +203,8 @@ export class TiempoController {
     @param.path.string('fecha_fin') fecha_fin: string,
     @param.query.object('filter', getFilterSchemaFor(Usuario)) filter?: Filter<Usuario>,
   ): Promise<{}> {
-    const fechaInicio = moment(fecha_inicio).date();
-    const fechaFin = moment(fecha_fin);
+    const fechaInicio = moment.utc(fecha_inicio).format('YYYY-MM-DD');
+    const fechaFin = moment.utc(fecha_fin).format('YYYY-MM-DD');
 
     const usuarios = await this.usuarioRepository.find(filter);
     const userIds = usuarios.map(item => item.id);
@@ -213,9 +217,12 @@ export class TiempoController {
       },
     });
 
-    const tiemposFiltrados = timeposList.filter(item =>
-      moment(item.fecha) >= fechaInicio && moment(item.fecha) <= fechaFin
-    );
+    const tiemposFiltrados = timeposList.filter(item => {
+      const itemFecha = moment.utc(item.fecha).format('YYYY-MM-DD');
+      return (
+        itemFecha >= fechaInicio && itemFecha <= fechaFin
+      )
+    });
 
     const duration = tiemposFiltrados.map(item => {
       const horaIni = moment(item.hora_inicio, "HH:mm:ss");
@@ -223,7 +230,7 @@ export class TiempoController {
 
       const diff = horaFin.diff(horaIni);
       return {
-        horasTabajadas: moment.utc(diff).format("HH:mm"),
+        horasTrabajadas: moment.utc(diff).format("HH:mm"),
         usuario_id: item.usuario_id
       }
     })
@@ -242,13 +249,13 @@ export class TiempoController {
         detalleDuration.forEach((el, idx) => {
           if (el.usuario_id === user) {
             indexDetail = idx;
-            time = el.horasTabajadas
+            time = el.horasTrabajadas
           }
         })
-        time = moment(time, "HH:mm") + moment.utc(item.horasTabajadas, "HH:mm")
+        time = moment(time, "HH:mm") + moment.utc(item.horasTrabajadas, "HH:mm")
         time = moment(time).format("HH:mm");
         detalleDuration.splice(indexDetail, 1)
-        detalleDuration.push({ horasTabajadas: time, usuario_id: user })
+        detalleDuration.push({ horasTrabajadas: time, usuario_id: user })
       }
     })
 
@@ -257,11 +264,11 @@ export class TiempoController {
       let response = {};
       detalleDuration.forEach(dur => {
         if (idUser === dur.usuario_id) {
-          response = { horasTabajadas: dur.horasTabajadas, nombreUsuario: userItem.nombre }
+          response = { horasTrabajadas: dur.horasTrabajadas, nombreUsuario: userItem.nombre }
         }
       })
       if (Object.keys(response).length === 0) {
-        response = { horasTabajadas: 0, nombreUsuario: userItem.nombre }
+        response = { horasTrabajadas: 0, nombreUsuario: userItem.nombre }
       }
       return response;
     })
