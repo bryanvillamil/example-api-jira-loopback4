@@ -1,9 +1,7 @@
+/* eslint-disable @typescript-eslint/camelcase */
 import {
-  Count,
-  CountSchema,
   Filter,
   repository,
-  Where,
 } from '@loopback/repository';
 import {
   post,
@@ -11,7 +9,6 @@ import {
   get,
   getFilterSchemaFor,
   getModelSchemaRef,
-  getWhereSchemaFor,
   put,
   del,
   requestBody,
@@ -48,25 +45,24 @@ export class UsuarioController {
     })
     usuario: Omit<Usuario, 'id'>,
   ): Promise<{}> {
+
+    const username = usuario.username;
+
+    const usernameExist = await this.usuarioRepository.find({
+      where: { username },
+    });
+
+    if (usernameExist.length) {
+      return {
+        statusCode: 403,
+        response: 'The user already created',
+      }
+    }
     await this.usuarioRepository.create(usuario);
     return {
       statusCode: 200,
-      response: 'El usuario fue creado correctamente',
+      response: 'The user was created correctly',
     }
-  }
-
-  @get('/usuarios/count', {
-    responses: {
-      '200': {
-        description: 'Usuario model count',
-        content: { 'application/json': { schema: CountSchema } },
-      },
-    },
-  })
-  async count(
-    @param.query.object('where', getWhereSchemaFor(Usuario)) where?: Where<Usuario>,
-  ): Promise<Count> {
-    return this.usuarioRepository.count(where);
   }
 
   @get('/usuarios', {
@@ -109,8 +105,28 @@ export class UsuarioController {
   async findById(
     @param.path.number('id') id: number,
     @param.query.object('filter', getFilterSchemaFor(Usuario)) filter?: Filter<Usuario>
-  ): Promise<Usuario> {
-    return this.usuarioRepository.findById(id, filter);
+  ): Promise<{}> {
+
+    const usernameExist = await this.usuarioRepository.findOne({
+      where: { id },
+    });
+
+    if (usernameExist) {
+
+      const user = await this.usuarioRepository.findById(id, filter);
+      return {
+        statusCode: 200,
+        response: {
+          username: user.username,
+          nombre: user.nombre,
+          apellido: user.apellido,
+        },
+      }
+    }
+    return {
+      statusCode: 403,
+      response: 'The user does not exist',
+    }
   }
 
   @put('/usuarios/{id}', {
@@ -124,11 +140,41 @@ export class UsuarioController {
     @param.path.number('id') id: number,
     @requestBody() usuario: Usuario,
   ): Promise<{}> {
-    await this.usuarioRepository.replaceById(id, usuario);
+
+    const username = usuario.username;
+
+    const usernameExist = await this.usuarioRepository.findOne({
+      where: { username },
+    });
+
+    const own = await this.usuarioRepository.findOne({
+      where: {
+        and: [
+          { username },
+          { id }
+        ]
+      },
+    });
+
+    if (!usernameExist) {
+      await this.usuarioRepository.replaceById(id, usuario);
+      return {
+        statusCode: 200,
+        response: 'The user was edit correctly',
+      }
+    }
+
+    if (own) {
+      await this.usuarioRepository.replaceById(id, usuario);
+      return {
+        statusCode: 200,
+        response: 'The user was edit correctly',
+      }
+    }
 
     return {
-      statusCode: 200,
-      response: 'Usuario Editado'
+      statusCode: 403,
+      response: 'the user is incorrect',
     }
   }
 
@@ -141,23 +187,33 @@ export class UsuarioController {
   })
   async deleteById(@param.path.number('id') id: number): Promise<{}> {
 
-    const tiempos = await this.tiempoRepository.find({
-      where: { usuario_id: id },
-    });
+    const UserExist = await this.usuarioRepository.findOne({
+      where: { id }
+    })
 
-    const tiempoIds = tiempos.map(item => item.id);
+    if (UserExist) {
+      const tiempos = await this.tiempoRepository.find({
+        where: { usuario_id: id },
+      });
 
-    await this.tiempoRepository.deleteAll({
-      id: {
-        inq: tiempoIds,
+      const tiempoIds = tiempos.map(item => item.id);
+
+      await this.tiempoRepository.deleteAll({
+        id: {
+          inq: tiempoIds,
+        }
+      });
+
+      await this.usuarioRepository.deleteById(id);
+
+      return {
+        statusCode: 200,
+        response: 'The user was deleted'
       }
-    });
-
-    await this.usuarioRepository.deleteById(id);
-
+    }
     return {
-      statusCode: 200,
-      response: 'Usuario Eliminado'
+      statusCode: 403,
+      response: 'The user was not deleted because it does NOT exist',
     }
   }
 }

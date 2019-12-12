@@ -1,5 +1,5 @@
+/* eslint-disable @typescript-eslint/camelcase */
 import {
-  Count,
   CountSchema,
   Filter,
   repository,
@@ -13,7 +13,6 @@ import {
   getModelSchemaRef,
   getWhereSchemaFor,
   patch,
-  put,
   del,
   requestBody,
 } from '@loopback/rest';
@@ -50,22 +49,23 @@ export class ProyectoController {
       },
     })
     proyecto: Omit<Proyecto, 'id'>,
-  ): Promise<Proyecto> {
-    return this.proyectoRepository.create(proyecto);
-  }
+  ): Promise<{}> {
 
-  @get('/proyectos/count', {
-    responses: {
-      '200': {
-        description: 'Proyecto model count',
-        content: { 'application/json': { schema: CountSchema } },
-      },
-    },
-  })
-  async count(
-    @param.query.object('where', getWhereSchemaFor(Proyecto)) where?: Where<Proyecto>,
-  ): Promise<Count> {
-    return this.proyectoRepository.count(where);
+    const projectExist = await this.proyectoRepository.findOne({
+      where: { key: proyecto.key }
+    });
+
+    if (projectExist) {
+      return {
+        statusCode: 403,
+        response: 'Key incorrect. Use another'
+      }
+    }
+    await this.proyectoRepository.create(proyecto);
+    return {
+      statusCode: 200,
+      response: 'The project was created successfully.'
+    }
   }
 
   @get('/proyectos', {
@@ -93,32 +93,6 @@ export class ProyectoController {
     }
   }
 
-  @patch('/proyectos', {
-    responses: {
-      '200': {
-        description: 'Proyecto PATCH success count',
-        content: { 'application/json': { schema: CountSchema } },
-      },
-    },
-  })
-  async updateAll(
-    @requestBody({
-      content: {
-        'application/json': {
-          schema: getModelSchemaRef(Proyecto, { partial: true }),
-        },
-      },
-    })
-    proyecto: Proyecto,
-    @param.query.object('where', getWhereSchemaFor(Proyecto)) where?: Where<Proyecto>,
-  ): Promise<{}> {
-    await this.proyectoRepository.updateAll(proyecto, where);
-    return {
-      statusCode: 200,
-      response: 'El Proyecto fue Editado'
-    }
-  }
-
   @get('/proyectos/{id}', {
     responses: {
       '200': {
@@ -134,8 +108,23 @@ export class ProyectoController {
   async findById(
     @param.path.number('id') id: number,
     @param.query.object('filter', getFilterSchemaFor(Proyecto)) filter?: Filter<Proyecto>
-  ): Promise<Proyecto> {
-    return this.proyectoRepository.findById(id, filter);
+  ): Promise<{}> {
+
+    const projectExist = await this.proyectoRepository.findOne({
+      where: { id },
+    });
+
+    if (projectExist) {
+      const user = await this.proyectoRepository.findById(id, filter);
+      return {
+        statusCode: 200,
+        response: user,
+      }
+    }
+    return {
+      statusCode: 403,
+      response: 'The proyect does not exist',
+    }
   }
 
   @patch('/proyectos/{id}', {
@@ -156,28 +145,27 @@ export class ProyectoController {
     })
     proyecto: Proyecto,
   ): Promise<{}> {
-    await this.proyectoRepository.updateById(id, proyecto);
-    return {
-      statusCode: 200,
-      response: 'El Proyecto fue Editado'
-    }
-  }
 
-  @put('/proyectos/{id}', {
-    responses: {
-      '204': {
-        description: 'Proyecto PUT success',
-      },
-    },
-  })
-  async replaceById(
-    @param.path.number('id') id: number,
-    @requestBody() proyecto: Proyecto,
-  ): Promise<{}> {
-    await this.proyectoRepository.replaceById(id, proyecto);
+    const projectExist = await this.proyectoRepository.findOne({
+      where: { id },
+    });
+
+    if (projectExist) {
+      if (projectExist.key === proyecto.key) {
+        return {
+          statusCode: 403,
+          response: 'Error cannot edit the key field',
+        }
+      }
+      const detailProject = await this.proyectoRepository.updateById(id, proyecto);
+      return {
+        statusCode: 200,
+        response: detailProject,
+      }
+    }
     return {
-      statusCode: 200,
-      response: 'El Proyecto fue Editado'
+      statusCode: 403,
+      response: 'The proyect does not exist',
     }
   }
 
@@ -190,35 +178,46 @@ export class ProyectoController {
   })
   async deleteById(@param.path.number('id') id: number): Promise<{}> {
 
-    const issues = await this.issueRepository.find({
-      where: { proyecto_id: id },
+    const projectExist = await this.proyectoRepository.findOne({
+      where: { id },
     });
-    const issuesIds = issues.map(item => item.id ? item.id : 0).filter(item => !!item);
-    const tiempos = await this.tiempoRepository.find({
-      where: {
-        issue_id: {
-          inq: issuesIds
+
+    if (projectExist) {
+      const issues = await this.issueRepository.find({
+        where: { proyecto_id: id },
+      });
+      const issuesIds = issues.map(item => item.id ? item.id : 0).filter(item => !!item);
+      const tiempos = await this.tiempoRepository.find({
+        where: {
+          issue_id: {
+            inq: issuesIds
+          },
         },
-      },
-    });
-    const tiemposIds = tiempos.map(item => item.id);
-    // delete in tiempos
-    await this.tiempoRepository.deleteAll({
-      id: {
-        inq: tiemposIds,
-      },
-    });
-    // delete in issue
-    await this.issueRepository.deleteAll({
-      id: {
-        inq: issuesIds,
-      },
-    });
-    // delete in proyecto
-    await this.proyectoRepository.deleteById(id);
+      });
+      const tiemposIds = tiempos.map(item => item.id);
+      // delete in tiempos
+      await this.tiempoRepository.deleteAll({
+        id: {
+          inq: tiemposIds,
+        },
+      });
+      // delete in issue
+      await this.issueRepository.deleteAll({
+        id: {
+          inq: issuesIds,
+        },
+      });
+      // delete in proyecto
+      await this.proyectoRepository.deleteById(id);
+      return {
+        statusCode: 200,
+        response: 'The project was eliminated'
+      }
+    }
+
     return {
-      statusCode: 200,
-      response: 'Proyecto Eliminado'
+      statusCode: 403,
+      response: 'The proyect does not exist',
     }
   }
 }
