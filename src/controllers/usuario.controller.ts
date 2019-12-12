@@ -174,14 +174,14 @@ export class UsuarioController {
 
     return {
       statusCode: 403,
-      response: 'the user is incorrect',
+      response: 'The user is incorrect',
     }
   }
 
   @del('/usuarios/{id}', {
     responses: {
       '204': {
-        description: 'el usuario fue borrado correctamente',
+        description: 'The user was remove correctly',
       },
     },
   })

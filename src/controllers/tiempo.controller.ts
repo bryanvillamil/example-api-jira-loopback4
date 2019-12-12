@@ -24,35 +24,6 @@ export class TiempoController {
     public proyectoRepository: ProyectoRepository,
   ) { }
 
-  @get('/tiempos', {
-    responses: {
-      '200': {
-        description: 'Array of Tiempo model instances',
-        content: {
-          'application/json': {
-            schema: {
-              type: 'array',
-              items: getModelSchemaRef(Tiempo, { includeRelations: true }),
-            },
-          },
-        },
-      },
-    },
-  })
-  async find(
-    @param.query.object('filter', getFilterSchemaFor(Tiempo)) filter?: Filter<Tiempo>,
-  ): Promise<{}> {
-
-    const listaTiempos = await this.tiempoRepository.find(filter);
-
-    return {
-      statusCode: 200,
-      response: listaTiempos
-    }
-  }
-
-
-
   @get('/horas/{usuario_id}/{fecha_inicio}/{fecha_fin}', {
     responses: {
       '200': {
@@ -69,35 +40,27 @@ export class TiempoController {
     @param.path.number('usuario_id') usuario_id: number,
     @param.path.string('fecha_inicio') fecha_inicio: string,
     @param.path.string('fecha_fin') fecha_fin: string,
-    // @param.query.object('filter', getFilterSchemaFor(Tiempo)) filter?: Filter<Tiempo>
   ): Promise<{}> {
 
-    const fechaInicio = moment.utc(fecha_inicio).format('YYYY-MM-DD');
-    const fechaFin = moment.utc(fecha_fin).format('YYYY-MM-DD');
+    const fechaInicio = moment.utc(fecha_inicio);
+    const fechaFin = moment.utc(fecha_fin);
 
     const usuarios = await this.tiempoRepository.find({
       where: { usuario_id: usuario_id },
     });
 
-    const usuarioDetail = await this.usuarioRepository.find({
+    const usuarioDetail = await this.usuarioRepository.findOne({
       where: { id: usuario_id },
     });
 
-    const dataUsuario = usuarioDetail.map(item => {
-      return {
-        id: item.id,
-        username: item.username,
-        nombre: item.nombre,
-        apellido: item.apellido,
-      }
-    });
-
-
-    const users = usuarios.filter(item => {
-      const itemFecha = moment.utc(item.fecha).format('YYYY-MM-DD');
-      return (
-        itemFecha >= fechaInicio && itemFecha <= fechaFin
-      )
+    const users = await this.tiempoRepository.find({
+      where: {
+        and: [
+          { usuario_id },
+          { fecha: { gte: fechaInicio } },
+          { fecha: { lte: fechaFin } },
+        ]
+      },
     });
 
     let tiempoTotal = moment('00:00:00', 'HH:mm:ss');
@@ -108,7 +71,7 @@ export class TiempoController {
 
       tiempoTotal = tiempoTotal + diff;
       return {
-        horasTrabajadas: moment.utc(diff).format("HH:mm"),
+        horas_trabajadas: moment.utc(diff).format("HH:mm"),
         issue_id: item.issue_id
       }
     });
@@ -129,13 +92,13 @@ export class TiempoController {
         detalleLogsSum.forEach((el, idx) => {
           if (el.issue_id === issue) {
             indexDetail = idx;
-            time = el.horasTrabajadas
+            time = el.horas_trabajadas
           }
         })
-        time = moment(time, "HH:mm") + moment.utc(item.horasTrabajadas, "HH:mm")
+        time = moment(time, "HH:mm") + moment.utc(item.horas_trabajadas, "HH:mm")
         time = moment(time).format("HH:mm");
         detalleLogsSum.splice(indexDetail, 1)
-        detalleLogsSum.push({ horasTrabajadas: time, issue_id: issue })
+        detalleLogsSum.push({ horas_trabajadas: time, issue_id: issue })
       }
     })
 
@@ -170,18 +133,24 @@ export class TiempoController {
       let proyecItem = {};
       proyectosList.forEach(pl => {
         if (proyectId === pl.id) {
-          proyecItem = { horasTrabajadas: item.horasTrabajadas, nombreProyecto: pl.nombre };
+          proyecItem = { horas_trabajadas: item.horas_trabajadas, nombreProyecto: pl.nombre };
         }
       })
       return proyecItem;
     })
 
+    if (usuarioDetail && usuarioDetail.id === usuarios[0].usuario_id) {
+      return {
+        statusCode: 200,
+        user: usuarioDetail,
+        tiempoTotal,
+        proyectos
+      };
+    }
     return {
-      statusCode: 200,
-      user: dataUsuario,
-      tiempoTotal,
-      proyectos
-    };
+      statusCode: 403,
+      response: 'The user is incorrect'
+    }
   }
 
   @get('/tiempos/{fecha_inicio}/{fecha_fin}', {
@@ -230,7 +199,7 @@ export class TiempoController {
 
       const diff = horaFin.diff(horaIni);
       return {
-        horasTrabajadas: moment.utc(diff).format("HH:mm"),
+        horas_trabajadas: moment.utc(diff).format("HH:mm"),
         usuario_id: item.usuario_id
       }
     })
@@ -249,13 +218,13 @@ export class TiempoController {
         detalleDuration.forEach((el, idx) => {
           if (el.usuario_id === user) {
             indexDetail = idx;
-            time = el.horasTrabajadas
+            time = el.horas_trabajadas
           }
         })
-        time = moment(time, "HH:mm") + moment.utc(item.horasTrabajadas, "HH:mm")
+        time = moment(time, "HH:mm") + moment.utc(item.horas_trabajadas, "HH:mm")
         time = moment(time).format("HH:mm");
         detalleDuration.splice(indexDetail, 1)
-        detalleDuration.push({ horasTrabajadas: time, usuario_id: user })
+        detalleDuration.push({ horas_trabajadas: time, usuario_id: user })
       }
     })
 
@@ -264,11 +233,11 @@ export class TiempoController {
       let response = {};
       detalleDuration.forEach(dur => {
         if (idUser === dur.usuario_id) {
-          response = { horasTrabajadas: dur.horasTrabajadas, nombreUsuario: userItem.nombre }
+          response = { horas_trabajadas: dur.horas_trabajadas, nombre_usuario: userItem.nombre }
         }
       })
       if (Object.keys(response).length === 0) {
-        response = { horasTrabajadas: 0, nombreUsuario: userItem.nombre }
+        response = { horas_trabajadas: 0, nombre_usuario: userItem.nombre }
       }
       return response;
     })
