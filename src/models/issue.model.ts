@@ -22,14 +22,8 @@ export class Issue extends Entity {
   })
   descripcion: string;
 
-  @property({
-    type: 'number',
-    required: true,
-  })
+  @belongsTo(() => Proyecto, { keyFrom: 'proyecto_id', name: 'proyecto' })
   proyecto_id: number;
-
-  // @belongsTo(() => Proyecto)
-  // proyecto_id: number;
 
   constructor(data?: Partial<Issue>) {
     super(data);

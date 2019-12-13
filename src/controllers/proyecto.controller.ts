@@ -1,9 +1,7 @@
 /* eslint-disable @typescript-eslint/camelcase */
 import {
-  CountSchema,
   Filter,
   repository,
-  Where,
 } from '@loopback/repository';
 import {
   post,
@@ -11,7 +9,6 @@ import {
   get,
   getFilterSchemaFor,
   getModelSchemaRef,
-  getWhereSchemaFor,
   patch,
   del,
   requestBody,
@@ -92,6 +89,43 @@ export class ProyectoController {
       response: listaProyectos
     }
   }
+
+  // @get('/proyectos/{id}/issue', {
+  //   responses: {
+  //     '200': {
+  //       description: 'Usuario model instance',
+  //       content: {
+  //         'application/json': {
+  //           schema: getModelSchemaRef(Proyecto, { includeRelations: true }),
+  //         },
+  //       },
+  //     },
+  //   },
+  // })
+  // async findIdByIssue(
+  //   @param.path.number('id') id: number,
+  //   // @param.query.object('filter', getFilterSchemaFor(Proyecto)) filter?: Filter<Proyecto>
+  // ): Promise<{}> {
+
+  //   const issues = await this.proyectoRepository.find({
+  //     include: [{ relation: 'proyecto' }]
+  //   });
+
+  //   console.log('issues', issues);
+
+
+  //   // if (issueExist) {
+  //   //   const issue = await this.issueRepository.findById(id, filter);
+  //   //   return {
+  //   //     statusCode: 200,
+  //   //     response: issue,
+  //   //   }
+  //   // }
+  //   return {
+  //     statusCode: 403,
+  //     response: {},
+  //   }
+  // }
 
   @get('/proyectos/{id}', {
     responses: {

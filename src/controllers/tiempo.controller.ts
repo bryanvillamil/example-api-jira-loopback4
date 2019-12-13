@@ -1,11 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/camelcase */
-import { TiempoRepository, UsuarioRepository, ProyectoRepository, IssueRepository } from "../repositories";
+import { TiempoRepository, UsuarioRepository, ProyectoRepository, IssueRepository, TimeBody, TimeBodyMultiple } from "../repositories";
 import { repository, Filter } from "@loopback/repository";
-import { get, getModelSchemaRef, param, getFilterSchemaFor } from "@loopback/rest";
+import { get, getModelSchemaRef, param, getFilterSchemaFor, post, requestBody } from "@loopback/rest";
 import { Tiempo } from "../models/tiempo.model";
 import { Usuario } from '../models';
 import moment from 'moment-with-locales-es6';
-import { format } from "path";
+import { TimeBodySpecs, TimeBodySpecsMultiple } from '../spec/tiempo.spec';
+
 
 // Uncomment these imports to begin using these cool features!
 
@@ -23,6 +25,26 @@ export class TiempoController {
     @repository(ProyectoRepository)
     public proyectoRepository: ProyectoRepository,
   ) { }
+
+  noRepeatedItems = (array: number[]) => {
+    const set = new Set(array);
+    const list: number[] = [];
+    set.forEach(item => list.push(item));
+    return list;
+  };
+
+  @get('/tiempos', {
+    responses: {
+      '200': {
+        description: 'Tiempos logueados',
+      },
+    },
+  })
+  async allTimes(
+    @param.query.object('filter', getFilterSchemaFor(Tiempo)) filter?: Filter<Tiempo>,
+  ): Promise<{}> {
+    return this.tiempoRepository.find(filter);
+  }
 
   @get('/horas/{usuario_id}/{fecha_inicio}/{fecha_fin}', {
     responses: {
@@ -64,7 +86,8 @@ export class TiempoController {
     });
 
     let tiempoTotal = moment('00:00:00', 'HH:mm:ss');
-    const detalleLogs = users.map(item => {
+
+    const detalleLogsUser = users.map(item => {
       const horaIni = moment(item.hora_inicio, "HH:mm:ss");
       const horaFin = moment(item.hora_fin, "HH:mm:ss");
       const diff = horaFin.diff(horaIni);
@@ -78,9 +101,31 @@ export class TiempoController {
 
     tiempoTotal = moment(tiempoTotal).format('HH:mm');
 
+    // // New Codigo para simplificar
+    // const salida = detalleLogsUser.reduce((previous: any, item: any) => {
+    //   const { issue_id } = item;
+    //   if (!previous[issue_id]) {
+    //     const itemHorasSumadasXIssue = detalleLogsUser.filter(e => e.issue_id === issue_id);
+    //     // previous[issue_id] = tuFuncionQueSumaHoras(itemHorasSumadasXIssue)b
+
+    //     let time = '00:00';
+    //     itemHorasSumadasXIssue.forEach(i => {
+    //       const horasASumar = i.horas_trabajadas;
+
+    //       time = moment(time, "HH:mm") + moment.utc(horasASumar, "HH:mm")
+    //       time = moment(time).format("HH:mm");
+    //     })
+
+    //     console.log(time, 'time');
+    //   }
+    //   return previous;
+    // }, {})
+
+    // console.log('salida', salida);
+
     const detalleLogsSum: any[] = [];
     const issuesIds: number[] = [];
-    detalleLogs.forEach(item => {
+    detalleLogsUser.forEach(item => {
       const issue = item.issue_id;
       const indexIssue = issuesIds.indexOf(issue);
       if (indexIssue === -1) {
@@ -133,7 +178,7 @@ export class TiempoController {
       let proyecItem = {};
       proyectosList.forEach(pl => {
         if (proyectId === pl.id) {
-          proyecItem = { horas_trabajadas: item.horas_trabajadas, nombreProyecto: pl.nombre };
+          proyecItem = { horas_trabajadas: item.horas_trabajadas, nombre_proyecto: pl.nombre };
         }
       })
       return proyecItem;
@@ -248,5 +293,89 @@ export class TiempoController {
         listaUsuarios,
       }
     };
+  }
+
+  @post('/tiempos', {
+    responses: {
+      '200': {
+        description: 'Usuario creado correctamente',
+      },
+    },
+  })
+  async create(
+    @requestBody(TimeBodySpecs)
+    timeBody: TimeBody
+  ): Promise<{}> {
+    const time = new Tiempo({
+      ...timeBody
+    });
+
+    const existUser = await this.usuarioRepository.findOne({
+      where: { id: time.usuario_id },
+    });
+    const existIssue = await this.issueRepository.findOne({
+      where: { id: time.issue_id },
+    });
+
+    if (existIssue && existUser) {
+      await this.tiempoRepository.create(time);
+      return {
+        statusCode: 200,
+        response: 'The time log has been created',
+      }
+    }
+    return {
+      statusCode: 402,
+      response: 'The usuario_id or issue_id not exist',
+    }
+  }
+
+  @post('/tiempos/multiple', {
+    responses: {
+      '200': {
+        description: 'Usuario creado correctamente',
+      },
+    },
+  })
+  async createMultiple(
+    @requestBody(TimeBodySpecsMultiple)
+    timeBody: TimeBodyMultiple
+  ): Promise<{}> {
+    // get ids to users and issues
+    const listUsuariosId: number[] = [];
+    const listIssueId: number[] = [];
+
+    timeBody.logs.forEach(item => {
+      listUsuariosId.push(item.usuario_id);
+      listIssueId.push(item.issue_id);
+    });
+
+    // clean the array so you don't have repeated items
+    const userId: number[] = this.noRepeatedItems(listUsuariosId);
+    const issueId: number[] = this.noRepeatedItems(listIssueId);
+
+    // I verify the existence of users and issues
+    const existUsers = await this.usuarioRepository.find({
+      where: { id: { inq: userId } }
+    });
+    const existIssues = await this.issueRepository.find({
+      where: { id: { inq: issueId } }
+    });
+
+
+    if (userId.length === existUsers.length && issueId.length === existIssues.length) {
+      const listLogs = timeBody.logs.map(item => (
+        new Tiempo({ ...item })
+      ))
+      await this.tiempoRepository.createAll(listLogs);
+      return {
+        statusCode: 200,
+        response: 'the logs were successfully registered'
+      }
+    }
+    return {
+      statusCode: 402,
+      response: 'issue id or user id incorrect'
+    }
   }
 }

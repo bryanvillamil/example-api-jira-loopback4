@@ -2,7 +2,7 @@
 import { repository, Filter } from "@loopback/repository";
 import { IssueRepository, ProyectoRepository, TiempoRepository } from "../repositories";
 import { get, param, getModelSchemaRef, getFilterSchemaFor, post, requestBody, put, del } from "@loopback/rest";
-import { Issue } from "../models/issue.model";
+import { Issue } from '../models/';
 
 // Uncomment these imports to begin using these cool features!
 
@@ -11,8 +11,7 @@ import { Issue } from "../models/issue.model";
 
 export class IssueController {
   constructor(
-    @repository(IssueRepository)
-    public issueRepository: IssueRepository,
+    @repository(IssueRepository) protected issueRepository: IssueRepository,
     @repository(ProyectoRepository)
     public proyectoRepository: ProyectoRepository,
     @repository(TiempoRepository)
@@ -36,8 +35,17 @@ export class IssueController {
   })
   async find(
     @param.query.object('filter', getFilterSchemaFor(Issue)) filter?: Filter<Issue>,
-  ): Promise<Issue[]> {
-    return this.issueRepository.find(filter);
+  ): Promise<{}> {
+    // return this.issueRepository.find(filter);
+
+    const issues = await this.issueRepository.find({
+      include: [{ relation: 'proyecto' }]
+    });
+
+    return {
+      statusCode: 200,
+      response: issues,
+    }
   }
 
   @get('/issues/{id}', {
