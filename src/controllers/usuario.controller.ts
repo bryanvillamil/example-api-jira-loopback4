@@ -144,40 +144,53 @@ export class UsuarioController {
     @requestBody() usuario: Usuario,
   ): Promise<{}> {
 
-    const username = usuario.username;
+    // const username = usuario.username;
 
-    const usernameExist = await this.usuarioRepository.findOne({
-      where: { username },
-    });
+    // const usernameExist = await this.usuarioRepository.findOne({
+    //   where: { username },
+    // });
 
-    const own = await this.usuarioRepository.findOne({
-      where: {
-        and: [
-          { username },
-          { id }
-        ]
-      },
-    });
+    // const own = await this.usuarioRepository.findOne({
+    //   where: {
+    //     and: [
+    //       { username },
+    //       { id }
+    //     ]
+    //   },
+    // });
 
-    if (!usernameExist) {
+    // if (!usernameExist) {
+    //   await this.usuarioRepository.replaceById(id, usuario);
+    //   return {
+    //     statusCode: 200,
+    //     response: 'The user was edit correctly',
+    //   }
+    // }
+
+    // if (own) {
+    //   await this.usuarioRepository.replaceById(id, usuario);
+    //   return {
+    //     statusCode: 200,
+    //     response: 'The user was edit correctly',
+    //   }
+    // }
+
+    const tx = await this.usuarioRepository.beginTransaction(IsolationLevel.READ_COMMITTED);
+
+    try {
       await this.usuarioRepository.replaceById(id, usuario);
+      await tx.commit();
       return {
         statusCode: 200,
         response: 'The user was edit correctly',
       }
-    }
-
-    if (own) {
-      await this.usuarioRepository.replaceById(id, usuario);
+    } catch (error) {
+      await tx.rollback();
       return {
-        statusCode: 200,
-        response: 'The user was edit correctly',
+        statusCode: 400,
+        response: 'The user is incorrect',
+        error,
       }
-    }
-
-    return {
-      statusCode: 403,
-      response: 'The user is incorrect',
     }
   }
 
