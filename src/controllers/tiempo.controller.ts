@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/camelcase */
 import { TiempoRepository, UsuarioRepository, ProyectoRepository, IssueRepository, TimeBody, TimeBodyMultiple } from "../repositories";
-import { repository, Filter } from "@loopback/repository";
+import { repository, Filter, IsolationLevel } from "@loopback/repository";
 import { get, getModelSchemaRef, param, getFilterSchemaFor, post, requestBody } from "@loopback/rest";
 import { Tiempo } from "../models/tiempo.model";
 import { Usuario } from '../models';
@@ -310,23 +310,22 @@ export class TiempoController {
       ...timeBody
     });
 
-    const existUser = await this.usuarioRepository.findOne({
-      where: { id: time.usuario_id },
-    });
-    const existIssue = await this.issueRepository.findOne({
-      where: { id: time.issue_id },
-    });
+    const tx = await this.tiempoRepository.beginTransaction(IsolationLevel.READ_COMMITTED);
 
-    if (existIssue && existUser) {
-      await this.tiempoRepository.create(time);
+    try {
+      await this.tiempoRepository.create(time, { transation: tx });
+      await tx.commit();
       return {
         statusCode: 200,
         response: 'The time log has been created',
       }
-    }
-    return {
-      statusCode: 402,
-      response: 'The usuario_id or issue_id not exist',
+    } catch (error) {
+      await tx.rollback();
+      return {
+        statusCode: 402,
+        response: 'The usuario_id or issue_id not exist',
+        error,
+      }
     }
   }
 

@@ -6,5 +6,5 @@
   "port": 3306,
   "user": "root",
   "password": "bryan123",
-  "database": "BD_JIRA"
+  "database": "bd_jira"
 }

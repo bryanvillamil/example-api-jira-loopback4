@@ -2,6 +2,7 @@
 import {
   Filter,
   repository,
+  IsolationLevel,
 } from '@loopback/repository';
 import {
   post,
@@ -58,6 +59,7 @@ export class UsuarioController {
         response: 'The user already created',
       }
     }
+
     await this.usuarioRepository.create(usuario);
     return {
       statusCode: 200,
@@ -81,9 +83,9 @@ export class UsuarioController {
     },
   })
   async find(
-    @param.query.object('filter', getFilterSchemaFor(Usuario)) filter?: Filter<Usuario>,
   ): Promise<{}> {
-    const listUsuarios = await this.usuarioRepository.find(filter);
+    const listUsuarios = await this.usuarioRepository.find();
+
     return {
       statusCode: 200,
       response: listUsuarios,
@@ -107,25 +109,26 @@ export class UsuarioController {
     @param.query.object('filter', getFilterSchemaFor(Usuario)) filter?: Filter<Usuario>
   ): Promise<{}> {
 
-    const usernameExist = await this.usuarioRepository.findOne({
-      where: { id },
-    });
+    const tx = await this.usuarioRepository.beginTransaction(IsolationLevel.READ_COMMITTED);
 
-    if (usernameExist) {
-
-      const user = await this.usuarioRepository.findById(id, filter);
+    try {
+      const user = await this.usuarioRepository.findById(id, filter, { transation: tx });
+      await tx.commit();
       return {
         statusCode: 200,
         response: {
           username: user.username,
           nombre: user.nombre,
           apellido: user.apellido,
-        },
+        }
       }
-    }
-    return {
-      statusCode: 403,
-      response: 'The user does not exist',
+    } catch (error) {
+      await tx.rollback();
+      return {
+        statusCode: 402,
+        response: 'The user does not exist',
+        error,
+      }
     }
   }
 
@@ -187,6 +190,8 @@ export class UsuarioController {
   })
   async deleteById(@param.path.number('id') id: number): Promise<{}> {
 
+    const tx = await this.usuarioRepository.beginTransaction(IsolationLevel.READ_COMMITTED);
+
     const UserExist = await this.usuarioRepository.findOne({
       where: { id }
     })
@@ -202,9 +207,11 @@ export class UsuarioController {
         id: {
           inq: tiempoIds,
         }
-      });
+      },
+        { transation: tx }
+      );
 
-      await this.usuarioRepository.deleteById(id);
+      await this.usuarioRepository.deleteById(id, { transation: tx });
 
       return {
         statusCode: 200,
